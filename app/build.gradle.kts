@@ -54,6 +54,12 @@ android {
             keyAlias = project.findProperty("RELEASE_KEY_ALIAS") as String?
             keyPassword = project.findProperty("RELEASE_KEY_PASSWORD") as String?
         }
+        create("debugConfig") {
+            storeFile = file("$rootDir/debug.keystore")
+            storePassword = "android"
+            keyAlias = "androiddebugkey"
+            keyPassword = "android"
+        }
     }
 
     bundle {
@@ -75,7 +81,7 @@ android {
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
         }
         debug {
-            signingConfig = signingConfigs.getByName("release")
+            signingConfig = signingConfigs.getByName("debugConfig")
         }
     }
     compileOptions {

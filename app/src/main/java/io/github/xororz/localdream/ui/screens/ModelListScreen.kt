@@ -258,7 +258,6 @@ fun ModelListScreen(navController: NavController, modifier: Modifier = Modifier)
     val msgNpuModelAddFailed = stringResource(R.string.npu_model_add_failed)
     val msgDeleteSuccess = stringResource(R.string.delete_success)
     val msgDeleteFailed = stringResource(R.string.delete_failed)
-    val msgUnsupportNpu = stringResource(R.string.unsupport_npu)
     val msgTagImportFailed = stringResource(R.string.tag_import_failed)
     val msgCleanTempNone = stringResource(R.string.clean_temp_none)
     val msgCleanTempDone = stringResource(R.string.clean_temp_done)
@@ -1098,12 +1097,6 @@ fun ModelListScreen(navController: NavController, modifier: Modifier = Modifier)
                                         scope.launch {
                                             snackbarHostState.showSnackbar(msgRemoteOffline)
                                         }
-                                    }
-                                    return@ModelCard
-                                }
-                                if (!Model.isDeviceSupported() && !model.runOnCpu && !model.isCustom) {
-                                    scope.launch {
-                                        snackbarHostState.showSnackbar(msgUnsupportNpu)
                                     }
                                     return@ModelCard
                                 }

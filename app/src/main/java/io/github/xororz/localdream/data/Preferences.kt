@@ -35,6 +35,7 @@ class GenerationPreferences(private val context: Context) {
     private val SHARE_USE_BASE64_KEY = booleanPreferencesKey("share_use_base64")
     private val SHARE_CLEAR_CLIPBOARD_KEY =
         booleanPreferencesKey("share_clear_clipboard_on_import")
+    private val CHIPSET_OVERRIDE_KEY = stringPreferencesKey("chipset_override")
 
     // UltraFix step/denoise are per-model (each model keeps its own repair
     // recipe), independent of that model's main generation params. Denoise is
@@ -94,6 +95,23 @@ class GenerationPreferences(private val context: Context) {
     suspend fun setShareClearClipboardOnImport(value: Boolean) {
         context.dataStore.edit { it[SHARE_CLEAR_CLIPBOARD_KEY] = value }
     }
+
+    fun observeChipsetOverride(): Flow<String> = context.dataStore.data
+        .catch { exception ->
+            if (exception is IOException) emit(emptyPreferences()) else throw exception
+        }
+        .map { it[CHIPSET_OVERRIDE_KEY] ?: "auto" }
+
+    suspend fun saveChipsetOverride(override: String) {
+        context.dataStore.edit { preferences ->
+            preferences[CHIPSET_OVERRIDE_KEY] = override
+        }
+    }
+
+    suspend fun getChipsetOverride(): String = context.dataStore.data
+        .map { preferences ->
+            preferences[CHIPSET_OVERRIDE_KEY] ?: "auto"
+        }.first()
 
     suspend fun saveBaseUrl(url: String) {
         context.dataStore.edit { preferences ->

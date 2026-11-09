@@ -64,9 +64,13 @@ object PatchScanner {
     }
 }
 
-private fun getDeviceSoc(): String = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-    Build.SOC_MODEL
-} else {
+private fun getDeviceSoc(): String = try {
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+        Build.SOC_MODEL
+    } else {
+        "CPU"
+    }
+} catch (_: Throwable) {
     "CPU"
 }
 
@@ -328,28 +332,24 @@ data class Model(
             "Osrivers/wan_2.1_vae.safetensors/resolve/main/wan_2.1_vae.safetensors|vae.safetensors",
         )
 
-        fun isDeviceSupported(): Boolean {
-            val soc = getDeviceSoc()
-            return getChipsetSuffix(soc) != null
-        }
+        @Volatile
+        var chipsetOverride: String = "auto"
 
-        fun isQualcommDevice(): Boolean {
-            val soc = getDeviceSoc().uppercase()
-            val prefixes = listOf(
-                "SM", "QCS", "QCM", "CQ", "IPQ", "SXR", "AIC", "SSG",
-                "SC", "SA", "SDM", "MSM", "QRB", "X1E", "X1P",
-            )
-            return prefixes.any { soc.startsWith(it) }
-        }
+        @Suppress("FunctionOnlyReturningConstant")
+        fun isDeviceSupported(): Boolean = true
 
-        fun getChipsetSuffix(soc: String): String? {
+        @Suppress("FunctionOnlyReturningConstant")
+        fun isQualcommDevice(): Boolean = true
+
+        fun getChipsetSuffix(soc: String): String {
+            val override = chipsetOverride
+            if (override.isNotEmpty() && override != "auto") {
+                return override
+            }
             if (soc in chipsetModelSuffixes) {
-                return chipsetModelSuffixes[soc]
+                return chipsetModelSuffixes[soc] ?: "min"
             }
-            if (soc.startsWith("SM")) {
-                return "min"
-            }
-            return null
+            return "min"
         }
 
         fun getModelsDir(context: Context): File = ModelStorage.modelsDir(context)
@@ -440,6 +440,7 @@ class UpscalerRepository private constructor(private val context: Context) {
         refreshMutex.withLock {
             if (isLoaded) return
             val baseUrl = generationPreferences.getBaseUrl()
+            Model.chipsetOverride = generationPreferences.getChipsetOverride()
             upscalers = withContext(Dispatchers.IO) { initializeUpscalers(baseUrl) }
             isLoaded = true
         }
@@ -447,7 +448,7 @@ class UpscalerRepository private constructor(private val context: Context) {
 
     private fun initializeUpscalers(baseUrl: String): List<UpscalerModel> {
         val soc = getDeviceSoc()
-        val suffix = Model.getChipsetSuffix(soc) ?: "min"
+        val suffix = Model.getChipsetSuffix(soc)
 
         return listOf(
             createAnimeUpscaler(baseUrl, suffix),
@@ -575,16 +576,16 @@ class ModelRepository private constructor(private val context: Context) {
                 val krea2TurboFile = File(dir, "KREA_2_TURBO")
 
                 when {
-                    zImageFile.exists() && DitEngine.isSupportedDevice() ->
+                    zImageFile.exists() ->
                         customModels.add(createCustomModel(dir, isNpu = true, ditKind = "zimage"))
 
-                    kleinFile.exists() && DitEngine.isSupportedDevice() ->
+                    kleinFile.exists() ->
                         customModels.add(createCustomModel(dir, isNpu = true, ditKind = "klein"))
 
-                    qwenImage21File.exists() && DitEngine.isSupportedDevice() ->
+                    qwenImage21File.exists() ->
                         customModels.add(createCustomModel(dir, isNpu = true, ditKind = "qwen21"))
 
-                    krea2TurboFile.exists() && DitEngine.isSupportedDevice() ->
+                    krea2TurboFile.exists() ->
                         customModels.add(createCustomModel(dir, isNpu = true, ditKind = "krea2turbo"))
 
                     animaFile.exists() ->
@@ -643,15 +644,13 @@ class ModelRepository private constructor(private val context: Context) {
         val customModels = scanCustomModels()
 
         val predefinedModels = mutableListOf<Model>().apply {
-            if (DitEngine.isSupportedDevice()) {
-                add(createZImageTurboModel())
-                add(createFlux2KleinModel())
-                add(createFlux2KleinModel(nineB = true))
-                add(createFlux3Model())
-                add(createQwenImage21Model())
-                add(createQwenImage21Model(turbo = true))
-                add(createKrea2TurboModel())
-            }
+            add(createZImageTurboModel())
+            add(createFlux2KleinModel())
+            add(createFlux2KleinModel(nineB = true))
+            add(createFlux3Model())
+            add(createQwenImage21Model())
+            add(createQwenImage21Model(turbo = true))
+            add(createKrea2TurboModel())
             if (isSdxlCapableSoc(getDeviceSoc())) {
                 add(createIllustriousV16Model())
                 add(createIllustriousV16Dmd2Model())
@@ -841,7 +840,8 @@ class ModelRepository private constructor(private val context: Context) {
         )
     }
 
-    private fun isSdxlCapableSoc(soc: String): Boolean = soc in setOf("SM8750", "SM8750P", "SM8850", "SM8850P", "SM8845", "SM8950", "SM8975", "SM8650")
+    @Suppress("FunctionOnlyReturningConstant", "UnusedParameter")
+    private fun isSdxlCapableSoc(soc: String): Boolean = true
 
     private fun createCyberRealisticV10Model(): Model {
         val id = "cyber_realistic_v10"
@@ -944,7 +944,7 @@ class ModelRepository private constructor(private val context: Context) {
     private fun createAnythingV5Model(): Model {
         val id = "anythingv5"
         val soc = getDeviceSoc()
-        val suffix = Model.getChipsetSuffix(soc) ?: "min"
+        val suffix = Model.getChipsetSuffix(soc)
         val fileUri = "xororz/sd-qnn/resolve/main/AnythingV5_qnn2.28_$suffix.zip"
 
         val isDownloaded = Model.isModelDownloaded(context, id, false)
@@ -989,7 +989,7 @@ class ModelRepository private constructor(private val context: Context) {
     private fun createQteaMixModel(): Model {
         val id = "qteamix"
         val soc = getDeviceSoc()
-        val suffix = Model.getChipsetSuffix(soc) ?: "min"
+        val suffix = Model.getChipsetSuffix(soc)
         val fileUri = "xororz/sd-qnn/resolve/main/QteaMix_qnn2.28_$suffix.zip"
         val isDownloaded = Model.isModelDownloaded(context, id, false)
         return Model(
@@ -1031,7 +1031,7 @@ class ModelRepository private constructor(private val context: Context) {
     private fun createCuteYukiMixModel(): Model {
         val id = "cuteyukimix"
         val soc = getDeviceSoc()
-        val suffix = Model.getChipsetSuffix(soc) ?: "min"
+        val suffix = Model.getChipsetSuffix(soc)
         val fileUri = "xororz/sd-qnn/resolve/main/CuteYukiMix_qnn2.28_$suffix.zip"
         val isDownloaded = Model.isModelDownloaded(context, id, false)
         return Model(
@@ -1073,7 +1073,7 @@ class ModelRepository private constructor(private val context: Context) {
     private fun createAbsoluteRealityModel(): Model {
         val id = "absolutereality"
         val soc = getDeviceSoc()
-        val suffix = Model.getChipsetSuffix(soc) ?: "min"
+        val suffix = Model.getChipsetSuffix(soc)
         val fileUri = "xororz/sd-qnn/resolve/main/AbsoluteReality_qnn2.28_$suffix.zip"
         val isDownloaded = Model.isModelDownloaded(context, id, false)
         return Model(
@@ -1116,7 +1116,7 @@ class ModelRepository private constructor(private val context: Context) {
     private fun createChilloutMixModel(): Model {
         val id = "chilloutmix"
         val soc = getDeviceSoc()
-        val suffix = Model.getChipsetSuffix(soc) ?: "min"
+        val suffix = Model.getChipsetSuffix(soc)
         val fileUri = "xororz/sd-qnn/resolve/main/ChilloutMix_qnn2.28_$suffix.zip"
         val isDownloaded = Model.isModelDownloaded(context, id, false)
         return Model(
@@ -1186,6 +1186,7 @@ class ModelRepository private constructor(private val context: Context) {
     suspend fun refreshAllModels() {
         refreshMutex.withLock {
             baseUrl = generationPreferences.getBaseUrl()
+            Model.chipsetOverride = generationPreferences.getChipsetOverride()
             models = withContext(Dispatchers.IO) { initializeModels() }
             isLoaded = true
         }

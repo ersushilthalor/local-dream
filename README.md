@@ -20,11 +20,11 @@ If you like it, please consider [sponsor](#-support-this-project) this project.
 >
 > **NPU support:**
 >
-> - SD1.5 models are supported on Snapdragon NPUs with Hexagon V68 architecture or newer.
-> - SDXL models are supported on Snapdragon 8 Gen 3 and newer devices.
->
-> CPU/GPU inference supports SD1.5 and imported SDXL MNN packages. Large SDXL
-> models require substantially more memory than SD1.5.
+> - Device and SoC checks have been removed so any device can attempt running NPU models.
+> - SD1.5 models are officially designed for Snapdragon NPUs with Hexagon V68 architecture or newer (default fallback uses the "min" chipset suffix).
+> - SDXL and DiT models are designed for Snapdragon 8 Gen 3 and newer devices.
+> - On unsupported or incompatible devices/SoCs, the NPU backend may crash or fail to initialize; this is expected and native crashes will surface in the error display.
+> - An optional chipset suffix override (auto / 8gen1 / 8gen2 / min) is available in Advanced Settings for experimenting on unknown chips.
 >
 > You can join our [telegram group](https://t.me/local_dream) for discussion or help with testing.
 

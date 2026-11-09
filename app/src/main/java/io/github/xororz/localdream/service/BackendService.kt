@@ -304,11 +304,17 @@ class BackendService : Service() {
         if (startBackend(want)) {
             serving = want
             updateServing(want)
+            if (process?.isAlive == false || backendState.value is BackendState.Error) {
+                Log.e(TAG, "Backend failed immediately after start")
+                return
+            }
             updateState(BackendState.Running)
         } else {
             serving = null
             updateServing(null)
-            updateState(BackendState.Error("Backend start failed", want.modelId))
+            if (backendState.value !is BackendState.Error) {
+                updateState(BackendState.Error("Backend start failed", want.modelId))
+            }
         }
     }
 
@@ -403,7 +409,7 @@ class BackendService : Service() {
                 // The DiT engine's Hexagon skels share this directory: it is
                 // already on the DSP search path, and they are only useful on
                 // the devices whose HTP version the engine covers.
-                if (DitEngine.isSupportedDevice()) {
+                try {
                     // Skel rebuilds often keep the exact (page-aligned) size,
                     // so also refresh any copy older than the installed APK.
                     val apkUpdateTime =
@@ -423,6 +429,8 @@ class BackendService : Service() {
                         target.setReadable(true, true)
                         target.setExecutable(true, true)
                     }
+                } catch (e: Exception) {
+                    Log.w(TAG, "Failed to copy DiT skels: ${e.message}", e)
                 }
             } catch (e: IOException) {
                 Log.e(TAG, "Failed to prepare QNN libraries from assets", e)
@@ -675,18 +683,32 @@ class BackendService : Service() {
 
     private fun startMonitorThread(proc: Process) {
         Thread {
+            val recentLines = ArrayDeque<String>()
             val exitCode = try {
                 proc.inputStream.bufferedReader().use { reader ->
                     var line: String?
                     while (reader.readLine().also { line = it } != null) {
-                        Log.i(TAG, "Backend: $line")
+                        val current = line ?: continue
+                        Log.i(TAG, "Backend: $current")
+                        synchronized(recentLines) {
+                            if (recentLines.size >= 50) {
+                                recentLines.removeFirst()
+                            }
+                            recentLines.addLast(current)
+                        }
                     }
                 }
                 proc.waitFor()
             } catch (e: Exception) {
                 Log.e(TAG, "monitor error", e)
                 if (isLiveCrash(proc)) {
-                    updateState(BackendState.Error("monitor error: ${e.message}", servingModelId.value))
+                    val logs = synchronized(recentLines) { recentLines.joinToString("\n") }
+                    val msg = if (logs.isNotEmpty()) {
+                        "monitor error: ${e.message}\n$logs"
+                    } else {
+                        "monitor error: ${e.message}"
+                    }
+                    updateState(BackendState.Error(msg, servingModelId.value))
                 }
                 return@Thread
             }
@@ -695,9 +717,16 @@ class BackendService : Service() {
             // we didn't intentionally stop it; a torn-down or superseded process
             // exiting is expected and must not poison the shared backendState.
             if (isLiveCrash(proc)) {
+                val logs = synchronized(recentLines) { recentLines.joinToString("\n") }
+                val errorMsg = buildString {
+                    append("Backend process exited with code: $exitCode")
+                    if (logs.isNotEmpty()) {
+                        append("\n").append(logs)
+                    }
+                }
                 updateState(
                     BackendState.Error(
-                        "Backend process exited with code: $exitCode",
+                        errorMsg,
                         servingModelId.value,
                     ),
                 )

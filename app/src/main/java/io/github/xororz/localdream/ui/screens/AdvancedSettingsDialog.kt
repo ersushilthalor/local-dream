@@ -84,6 +84,8 @@ internal fun AdvancedSettingsDialog(
     onDenoiseStrengthChange: (Float) -> Unit,
     onSeedChange: (String) -> Unit,
     onUseLastSeed: () -> Unit,
+    chipsetOverride: String = "auto",
+    onChipsetOverrideChange: (String) -> Unit = {},
     onImportFromClipboard: () -> Unit,
     onShare: () -> Unit,
     onReset: () -> Unit,
@@ -484,6 +486,50 @@ internal fun AdvancedSettingsDialog(
                                     returnedSeed.toString(),
                                 ),
                             )
+                        }
+                    }
+                }
+
+                Column(modifier = Modifier.fillMaxWidth()) {
+                    Text(
+                        "Chipset Suffix Override",
+                        style = MaterialTheme.typography.bodyMedium,
+                    )
+                    val chipOptions = listOf(
+                        "auto" to "Auto",
+                        "8gen1" to "8gen1",
+                        "8gen2" to "8gen2",
+                        "min" to "min",
+                    )
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .horizontalScroll(rememberScrollState()),
+                        horizontalArrangement = Arrangement.spacedBy(
+                            ButtonGroupDefaults.ConnectedSpaceBetween,
+                        ),
+                    ) {
+                        chipOptions.forEachIndexed { index, (id, label) ->
+                            val shapes = when (index) {
+                                0 -> ButtonGroupDefaults.connectedLeadingButtonShapes()
+
+                                chipOptions.lastIndex ->
+                                    ButtonGroupDefaults.connectedTrailingButtonShapes()
+
+                                else -> ButtonGroupDefaults.connectedMiddleButtonShapes()
+                            }
+                            ToggleButton(
+                                checked = chipsetOverride == id,
+                                onCheckedChange = { checked ->
+                                    if (checked) {
+                                        onChipsetOverrideChange(id)
+                                    }
+                                },
+                                shapes = shapes,
+                                enabled = !isRunning,
+                            ) {
+                                Text(label)
+                            }
                         }
                     }
                 }

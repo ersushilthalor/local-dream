@@ -143,6 +143,7 @@ import io.github.xororz.localdream.data.GenerationPreferences
 import io.github.xororz.localdream.data.HistoryFilter
 import io.github.xororz.localdream.data.HistoryItem
 import io.github.xororz.localdream.data.HistoryManager
+import io.github.xororz.localdream.data.Model
 import io.github.xororz.localdream.data.ModelRepository
 import io.github.xororz.localdream.data.ModelStorage
 import io.github.xororz.localdream.data.PatchScanner
@@ -207,6 +208,7 @@ fun ModelRunScreen(
     val resources = LocalResources.current
     val scope = rememberCoroutineScope()
     val generationPreferences = remember { GenerationPreferences(context) }
+    val chipsetOverride by generationPreferences.observeChipsetOverride().collectAsState(initial = "auto")
     val coroutineScope = rememberCoroutineScope()
     val lifecycleOwner = LocalLifecycleOwner.current
     val modelRepository = remember { ModelRepository.getInstance(context) }
@@ -1891,7 +1893,8 @@ fun ModelRunScreen(
                 },
                 onUnhealthy = {
                     isCheckingBackend = false
-                    errorMessage = msgBackendFailed
+                    val err = (BackendService.backendState.value as? BackendService.BackendState.Error)?.message
+                    errorMessage = err ?: msgBackendFailed
                 },
             )
         }
@@ -2100,6 +2103,14 @@ fun ModelRunScreen(
                                     onUseLastSeed = {
                                         seed = returnedSeed.toString()
                                         saveAllFields()
+                                    },
+                                    chipsetOverride = chipsetOverride,
+                                    onChipsetOverrideChange = { override ->
+                                        scope.launch {
+                                            generationPreferences.saveChipsetOverride(override)
+                                            Model.chipsetOverride = override
+                                            modelRepository.refreshAllModels()
+                                        }
                                     },
                                     onImportFromClipboard = {
                                         val clipboard =
